@@ -6,5 +6,5 @@ help:
 	@echo "Available tasks :"
 	@echo "\tbackupstate - Check the state of my time machine backup drive"
 
-taskname:
+backupstate:
 	@python backupstate.py
