@@ -1,24 +1,51 @@
 #!/usr/bin/env python
 import ConfigParser
+import traceback
 import sys
-import plistlib
-import json
 import os
 import subprocess
-import traceback
+import argparse
+import plistlib
+import json
 
 class BackupState:
 
     def __init__(self):
-        config = ConfigParser.ConfigParser()
+        self.arg_parser = argparse.ArgumentParser()
+        self.arg_parser.add_argument(
+            "-c", "--config_file", help="Location of the configuration file")
+        self.arg_parser.add_argument(
+            "-m", "--method_to_use", help="Which method to use?", default='run_command')
+        self.arg_parser.add_argument(
+            "-q", "--quiet", help="Prevents output to the screen", action="store_true", default=False)
+
+        self.args = self.arg_parser.parse_args()
+
+        self.defaults = {
+            'config_file': 'config.ini'
+        }
+
+        # Collect any arguments passed to argparser
+        self.quiet = self.args.quiet
+        self.method_to_use = self.args.method_to_use
+
+        # Set the default for the configuration file
+        if self.args.config_file:
+            self.config_file = self.args.config_file
+        else:
+            self.config_file = self.defaults['config_file']
 
         try:
-            config.read("config.ini")
-            self.backup_name = config.get('GeneralSettings', 'DriveName')
+            config = ConfigParser.ConfigParser()
+            if os.path.exists('config.ini'):
+                config.read("config.ini")
+            else:
+                raise Exception('No config.ini file was found')
         except:
             print('Could not load config.ini')
             exit()
         finally:
+            self.backup_name = config.get('GeneralSettings', 'DriveName')
             self.backup_device = None
             self.diskutil_plist = 'diskutil.plist'
             self.tmutil_output_file_name = 'tmutil_status.output'
