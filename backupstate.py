@@ -15,14 +15,16 @@ class BackupState:
         self.arg_parser.add_argument(
             "-c", "--config_file", help="Location of the configuration file")
         self.arg_parser.add_argument(
-            "-m", "--method_to_use", help="Which method to use?", default='run_command')
+            "-m", "--method_to_use", help="Which method to use?", default='drive_data')
         self.arg_parser.add_argument(
             "-q", "--quiet", help="Prevents output to the screen", action="store_true", default=False)
 
         self.args = self.arg_parser.parse_args()
 
         self.defaults = {
-            'config_file': 'config.ini'
+            'config_file': 'config.ini',
+            'drive_name': 'My Passport',
+            'remove_tmp': True
         }
 
         # Collect any arguments passed to argparser
@@ -39,21 +41,38 @@ class BackupState:
             config = ConfigParser.ConfigParser()
             if os.path.exists('config.ini'):
                 config.read("config.ini")
+                self.config_data = {}
+                self.config_data['drive_name'] = config.get('GeneralSettings', 'DriveName')
+                self.config_data['remove_tmp'] = config.get('GeneralSettings', 'RemoveTmp')
             else:
                 raise Exception('No config.ini file was found')
         except:
             print('Could not load config.ini')
             exit()
         finally:
-            self.backup_name = config.get('GeneralSettings', 'DriveName')
+            if self.config_data:
+                self.backup_name = self.config_data['drive_name']
+                self.remove_tmp = self.config_data['remove_tmp']
+            else:
+                self.backup_name = self.defaults['drive_name']
+                self.remove_tmp = self.defaults['remove_tmp']
+
             self.backup_device = None
             self.diskutil_plist = 'diskutil.plist'
             self.tmutil_output_file_name = 'tmutil_status.output'
             self.tmutil_running_file_name = 'tmutil_status_running.output'
             self.tmutil_percentage_file_name = 'tmutil_status_percentage.output'
-            self.remove_tmp = True
 
     def main(self):
+        if self.method_to_use:
+            if self.method_to_use == 'drive_data':
+                self.generateDriveData()
+            else:
+                print('Command not configured')
+        else:
+            print('No command specified')
+
+    def generateDriveData(self):
         diskutil_data = self.getDiskUtilPlist(file_to_read=self.diskutil_plist, remove_tmp=self.remove_tmp)
         self.backup_device = { 'volume_name': None, 'device_identifier': None, 'mount_point': None, 'mounted': None, 'backup_in_progress': False, 'backup_raw_percentage': None }
         for disk in diskutil_data['AllDisksAndPartitions']:
