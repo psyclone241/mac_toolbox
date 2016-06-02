@@ -7,29 +7,35 @@ import subprocess
 import argparse
 import plistlib
 import json
+import re
 
 class BackupState:
 
     def __init__(self):
+        self.defaults = {
+            'config_file': 'config.ini',
+            'drive_name': 'My Passport',
+            'remove_tmp': True,
+            'output_json': True,
+            'output_file': 'device_data.json'
+        }
+
         self.arg_parser = argparse.ArgumentParser()
         self.arg_parser.add_argument(
             "-c", "--config_file", help="Location of the configuration file")
         self.arg_parser.add_argument(
             "-m", "--method_to_use", help="Which method to use?", default='drive_data')
         self.arg_parser.add_argument(
+            "-o", "--output_file", help="Name your output file?", default=self.defaults['output_file'])
+        self.arg_parser.add_argument(
             "-q", "--quiet", help="Prevents output to the screen", action="store_true", default=False)
 
         self.args = self.arg_parser.parse_args()
 
-        self.defaults = {
-            'config_file': 'config.ini',
-            'drive_name': 'My Passport',
-            'remove_tmp': True
-        }
-
         # Collect any arguments passed to argparser
         self.quiet = self.args.quiet
         self.method_to_use = self.args.method_to_use
+        self.arg_output_file = self.args.output_file
 
         # Set the default for the configuration file
         if self.args.config_file:
@@ -44,18 +50,38 @@ class BackupState:
                 self.config_data = {}
                 self.config_data['drive_name'] = config.get('GeneralSettings', 'DriveName')
                 self.config_data['remove_tmp'] = config.get('GeneralSettings', 'RemoveTmp')
+                self.config_data['output_json'] = config.get('GeneralSettings', 'OutputJson')
+                self.config_data['output_file'] = config.get('GeneralSettings', 'OutputFile')
             else:
                 raise Exception('No config.ini file was found')
         except:
-            print('Could not load config.ini')
+            self.sendToTerminal('Could not load config.ini')
             exit()
         finally:
             if self.config_data:
-                self.backup_name = self.config_data['drive_name']
-                self.remove_tmp = self.config_data['remove_tmp']
+                if self.config_data['drive_name']:
+                    self.backup_name = self.config_data['drive_name']
+                else:
+                    self.backup_name = self.defaults['drive_name']
+
+                if self.config_data['remove_tmp']:
+                    self.remove_tmp = self.config_data['remove_tmp']
+                else:
+                    self.remove_tmp = self.defaults['remove_tmp']
+
+                if self.config_data['output_json']:
+                    self.output_json = self.config_data['output_json']
+                else:
+                    self.output_json = self.defaults['output_json']
+
+                if self.config_data['output_json']:
+                    self.output_file = self.config_data['output_file']
+                else:
+                    self.output_file = self.defaults['output_file']
             else:
                 self.backup_name = self.defaults['drive_name']
                 self.remove_tmp = self.defaults['remove_tmp']
+                self.output_json = self.defaults['output_json']
 
             self.backup_device = None
             self.diskutil_plist = 'diskutil.plist'
@@ -67,10 +93,12 @@ class BackupState:
         if self.method_to_use:
             if self.method_to_use == 'drive_data':
                 self.generateDriveData()
+            elif self.method_to_use == 'read_tmutil':
+                self.readTmUtilStatus()
             else:
-                print('Command not configured')
+                self.sendToTerminal('Command not configured')
         else:
-            print('No command specified')
+            self.sendToTerminal('No command specified')
 
     def generateDriveData(self):
         diskutil_data = self.getDiskUtilPlist(file_to_read=self.diskutil_plist, remove_tmp=self.remove_tmp)
@@ -114,9 +142,53 @@ class BackupState:
                 self.backup_device['backup_raw_percentage'] = backup_raw_percentage
 
         if self.backup_device['volume_name']:
-            print(self.backup_device)
+            if self.output_json:
+                json_data = json.dumps(self.backup_device, indent=4)
+                if self.quiet:
+                    with open('device_data.json', 'w') as json_file:
+                        json_file.write(json_data)
+                else:
+                    self.sendToTerminal(json_data)
+            else:
+                self.sendToTerminal(self.backup_device)
         else:
-            print('No backup device named "' + self.backup_name + '" was found')
+            self.sendToTerminal('No backup device named "' + self.backup_name + '" was found')
+
+    def readTmUtilStatus(self):
+        with open('tmutil.json', 'r') as tmutil_file:
+            tmutil_data = tmutil_file.read()
+
+        tmutil_data = tmutil_data.replace('Backup session status:\n', '')
+        tmutil_data = tmutil_data.replace('};', '},')
+        tmutil_data = tmutil_data.replace('    ', '')
+        tmutil_data = re.sub(r'\s[=]\s', ':', tmutil_data)
+
+        with open('tmutil.tmp.json', 'w') as tmp_file:
+            tmp_file.write(tmutil_data)
+
+        new_tmutil_data = ''
+        with open('tmutil.tmp.json', 'r') as tmp_file_re:
+            for line in tmp_file_re:
+                line = line.strip()
+                if ':' in line:
+                    parts = line.split(':')
+                    if '"' not in parts[1]:
+                        value = type(parts[1])
+                        if type(parts[1]) == str:
+                            line = line.replace(parts[1], '"' + parts[1] + '"')
+
+                    line = line.replace(';', ",")
+
+                    if '"' not in parts[0]:
+                        line = line.replace(parts[0], '"' + parts[0] + '"')
+
+                print(line)
+                # new_tmutil_data += line
+
+
+        # print(new_tmutil_data)
+        # json_data = json.loads(new_tmutil_data)
+        # print(json.dumps(json_data, indent=4))
 
     def getDiskUtilPlist(self, file_to_read, remove_tmp):
         diskutil_plist_data = None
@@ -129,8 +201,12 @@ class BackupState:
                 os.unlink(file_to_read)
             return diskutil_plist_data
         except Exception, e:
-            print(e)
+            self.sendToTerminal(e)
             return None
+
+    def sendToTerminal(self, message):
+        if not self.quiet:
+            print(message)
 
     def getDataFromTmUtilFile(self, file_to_output_to, file_to_read=None, key=None, pattern=None, remove_tmp=False):
         devnull = open(os.devnull, 'w')
@@ -159,7 +235,7 @@ class BackupState:
 
                     return data
                 except Exception, e:
-                    print(e)
+                    self.sendToTerminal(e)
                     return False
             else:
                 return False
