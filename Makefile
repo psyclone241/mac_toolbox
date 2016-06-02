@@ -7,4 +7,4 @@ help:
 	@echo "\tbackupstate - Check the state of my time machine backup drive"
 
 backupstate:
-	@python backupstate.py
+	@python backupstate.py -q
