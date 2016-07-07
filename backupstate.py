@@ -17,7 +17,7 @@ class BackupState:
             'drive_name': 'My Passport',
             'remove_tmp': True,
             'output_json': True,
-            'output_file': 'device_data.json'
+            'output_file': 'device_data.sjson'
         }
 
         self.arg_parser = argparse.ArgumentParser()
@@ -74,10 +74,13 @@ class BackupState:
                 else:
                     self.output_json = self.defaults['output_json']
 
-                if self.config_data['output_json']:
+                if self.config_data['output_file']:
                     self.output_file = self.config_data['output_file']
                 else:
-                    self.output_file = self.defaults['output_file']
+                    if self.arg_output_file:
+                        self.output_file = self.arg_output_file
+                    else:
+                        self.output_file = self.defaults['output_file']
             else:
                 self.backup_name = self.defaults['drive_name']
                 self.remove_tmp = self.defaults['remove_tmp']
@@ -88,6 +91,7 @@ class BackupState:
             self.tmutil_output_file_name = 'tmutil_status.output'
             self.tmutil_running_file_name = 'tmutil_status_running.output'
             self.tmutil_percentage_file_name = 'tmutil_status_percentage.output'
+            self.tmutil_phase_file_name = 'tmutil_status_phase.output'
 
     def main(self):
         if self.method_to_use:
@@ -118,6 +122,8 @@ class BackupState:
                         backup_in_progress = self.getDataFromTmUtilFile(file_to_output_to=self.tmutil_running_file_name, file_to_read=self.tmutil_output_file_name, key='Running', pattern='[0-9]', remove_tmp=self.remove_tmp)
                         if backup_in_progress == '1':
                             backup_in_progress = True
+
+                            backup_phase = self.getDataFromTmUtilFile(file_to_output_to=self.tmutil_phase_file_name, file_to_read=self.tmutil_output_file_name, key='BackupPhase', pattern='[a-zA-Z]', remove_tmp=self.remove_tmp)
                         else:
                             backup_in_progress = False
 
@@ -140,12 +146,13 @@ class BackupState:
                 self.backup_device['mounted'] = mounted
                 self.backup_device['backup_in_progress'] = backup_in_progress
                 self.backup_device['backup_raw_percentage'] = backup_raw_percentage
+                self.backup_device['backup_phase'] = backup_phase
 
         if self.backup_device['volume_name']:
             if self.output_json:
                 json_data = json.dumps(self.backup_device, indent=4)
                 if self.quiet:
-                    with open('device_data.json', 'w') as json_file:
+                    with open(self.output_file, 'w') as json_file:
                         json_file.write(json_data)
                 else:
                     self.sendToTerminal(json_data)
