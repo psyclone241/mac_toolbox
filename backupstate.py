@@ -36,6 +36,8 @@ class BackupState:
         self.quiet = self.args.quiet
         self.method_to_use = self.args.method_to_use
         self.arg_output_file = self.args.output_file
+        if self.arg_output_file:
+            self.quiet = True
 
         # Set the default for the configuration file
         if self.args.config_file:
