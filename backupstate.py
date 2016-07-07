@@ -17,7 +17,7 @@ class BackupState:
             'drive_name': 'My Passport',
             'remove_tmp': True,
             'output_json': True,
-            'output_file': 'device_data.sjson'
+            'output_file': 'device_data.json'
         }
 
         self.arg_parser = argparse.ArgumentParser()
@@ -120,6 +120,7 @@ class BackupState:
 
                     if self.getDataFromTmUtilFile(file_to_output_to=self.tmutil_output_file_name, remove_tmp=False):
                         backup_in_progress = self.getDataFromTmUtilFile(file_to_output_to=self.tmutil_running_file_name, file_to_read=self.tmutil_output_file_name, key='Running', pattern='[0-9]', remove_tmp=self.remove_tmp)
+                        backup_phase = None
                         if backup_in_progress == '1':
                             backup_in_progress = True
 
